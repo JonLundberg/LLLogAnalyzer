@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "LLLogAnalyzer"
+version = "0.1.0"
+description = "Deterministic command-line analyzer for LM Studio and llama.cpp logs."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = []
+keywords = ["lm-studio", "llama.cpp", "logs", "gguf", "moe"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development :: Quality Assurance",
+    "Topic :: System :: Logging",
+]
+dependencies = []
+
+[project.scripts]
+llloganalyzer = "LLLogAnalyzer:main"
+
+[tool.setuptools]
+py-modules = ["LLLogAnalyzer"]

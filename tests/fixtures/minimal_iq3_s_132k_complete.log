@@ -1,0 +1,38 @@
+LlamaV4::load called with model path: C:\LMStudioModels\unsloth\Qwen3.6-35B-A3B-GGUF\Qwen3.6-35B-A3B-UD-IQ3_S.gguf
+LlamaV4::load config: n_parallel=1 n_ctx=132107 kv_unified=true
+ggml_cuda_init: found 1 CUDA devices (Total VRAM: 16302 MiB):
+Device 0: NVIDIA GeForce RTX 5070 Ti, compute capability 12.0, VMM: yes, VRAM: 16302 MiB
+llama_model_load_from_file_impl: using device CUDA0 (NVIDIA GeForce RTX 5070 Ti) (0000:01:00.0) - 15009 MiB free
+print_info: arch                  = qwen35moe
+print_info: file type   = IQ3_S - 3.4375 bpw
+print_info: file size   = 12.73 GiB (3.15 BPW)
+print_info: n_ctx_train           = 262144
+print_info: n_layer               = 40
+print_info: n_expert              = 256
+print_info: n_expert_used         = 8
+load_tensors: offloading output layer to GPU
+load_tensors: offloading 30 repeating layers to GPU
+load_tensors: offloaded 31/41 layers to GPU
+load_tensors:          CPU model buffer size =   397.85 MiB
+load_tensors:        CUDA0 model buffer size =  9044.30 MiB
+load_tensors:    CUDA_Host model buffer size =  3590.51 MiB
+llama_context: n_ctx         = 132352
+llama_context: n_batch       = 512
+llama_context: n_ubatch      = 512
+llama_context: flash_attn    = enabled
+llama_kv_cache:        CPU KV buffer size =   274.66 MiB
+llama_kv_cache:      CUDA0 KV buffer size =  1098.62 MiB
+llama_kv_cache: size = 1373.28 MiB (132352 cells,  10 layers,  1/1 seqs), K (q8_0):  686.64 MiB, V (q8_0):  686.64 MiB
+llama_memory_recurrent:        CPU RS buffer size =    16.75 MiB
+llama_memory_recurrent:      CUDA0 RS buffer size =    46.06 MiB
+llama_memory_recurrent: size =   62.81 MiB (     1 cells,  40 layers,  1 seqs), R (f32):    2.81 MiB, S (f32):   60.00 MiB
+sched_reserve:      CUDA0 compute buffer size =   574.20 MiB
+sched_reserve:  CUDA_Host compute buffer size =   278.88 MiB
+sched_reserve: graph nodes  = 3849
+sched_reserve: graph splits = 220 (with bs=512), 22 (with bs=1)
+slot update_slots: id  0 | task 0 | new prompt, n_ctx_slot = 132352, n_keep = 11215, task.n_tokens = 63310
+slot print_timing: id  0 | task 0 |
+prompt eval time =   34091.84 ms / 63310 tokens (    0.54 ms per token,  1857.04 tokens per second)
+       eval time =   69005.05 ms /   860 tokens (   80.24 ms per token,    12.46 tokens per second)
+      total time =  103096.89 ms / 64170 tokens
+slot      release: id  0 | task 0 | stop processing: n_tokens = 64170, truncated = 0

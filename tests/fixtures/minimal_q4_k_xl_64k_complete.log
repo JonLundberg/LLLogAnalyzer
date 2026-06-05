@@ -1,0 +1,29 @@
+LlamaV4::load called with model path: C:\LMStudioModels\unsloth\Qwen3.6-35B-A3B-GGUF\Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf
+LlamaV4::load config: n_parallel=1 n_ctx=64000 kv_unified=true
+ggml_cuda_init: found 1 CUDA devices (Total VRAM: 16302 MiB):
+Device 0: NVIDIA GeForce RTX 5070 Ti, compute capability 12.0, VMM: yes, VRAM: 16302 MiB
+print_info: arch                  = qwen35moe
+print_info: file type   = Q4_K - Medium
+print_info: file size   = 20.81 GiB (5.16 BPW)
+print_info: n_ctx_train           = 262144
+print_info: n_layer               = 40
+print_info: n_expert              = 256
+print_info: n_expert_used         = 8
+load_tensors: offloading output layer to GPU
+load_tensors: offloading 18 repeating layers to GPU
+load_tensors: offloaded 19/41 layers to GPU
+load_tensors:        CUDA0 model buffer size =  9651.39 MiB
+load_tensors:    CUDA_Host model buffer size = 11662.73 MiB
+llama_context: n_ctx         = 64000
+llama_context: n_batch       = 512
+llama_context: n_ubatch      = 512
+llama_context: flash_attn    = enabled
+llama_kv_cache: size =  664.06 MiB ( 64000 cells,  10 layers,  1/1 seqs), K (q8_0):  332.03 MiB, V (q8_0):  332.03 MiB
+sched_reserve: graph nodes  = 3849
+sched_reserve: graph splits = 466 (with bs=512), 36 (with bs=1)
+slot update_slots: id  0 | task 3933 | new prompt, n_ctx_slot = 64000, n_keep = 0, task.n_tokens = 44710
+slot print_timing: id  0 | task 3933 |
+prompt eval time =   34633.09 ms / 44710 tokens (    0.77 ms per token,  1290.96 tokens per second)
+       eval time =  102848.98 ms /   773 tokens (  133.05 ms per token,     7.52 tokens per second)
+      total time =  137482.06 ms / 45483 tokens
+slot      release: id  0 | task 3933 | stop processing: n_tokens = 45482, truncated = 0
