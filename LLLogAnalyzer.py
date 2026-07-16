@@ -454,29 +454,90 @@ class LogParser:
         self.context_by_slot: Dict[int, Dict[str, int]] = {}
 
     def parse(self) -> Dict[str, Any]:
-        index = 0
-        while index < len(self.lines):
-            line = self.lines[index]
+        self._timings_by_key: Dict[Tuple[Optional[int], Optional[int]], Dict[str, Any]] = {}
+        self._timing_order: List[Tuple[Optional[int], Optional[int]]] = []
+        self._last_timing_key: Optional[Tuple[Optional[int], Optional[int]]] = None
+        for line in self.lines:
             self._parse_line(line)
-            timing_match = Regexes.TIMING_HEADER.search(line)
-            if timing_match:
-                timing, consumed = self._parse_timing(index, timing_match)
-                if timing:
-                    self.report["timings"].append(timing)
-                index += consumed
+            header = Regexes.TIMING_HEADER.search(line)
+            if header:
+                # New llama.cpp / llama-server format prints a print_timing header on
+                # every timing line, including the metric lines themselves. Accumulate
+                # metrics per (slot, task) rather than scanning a fixed block window.
+                slot = parse_int(header.group("slot"))
+                task = parse_int(header.group("task"))
+                key = (slot, task)
+                self._last_timing_key = key
+                self._apply_timing_metrics(self._timing_for_key(key), line)
                 continue
             if self._is_timing_metric_line(line):
-                timing, consumed = self._parse_timing(index, None)
-                if timing:
-                    self.report["timings"].append(timing)
-                    index += consumed
-                    continue
-            index += 1
+                # Old format: metric lines follow a headerless block header. Attach them
+                # to the most recently seen timing block.
+                key = self._last_timing_key or (None, None)
+                self._apply_timing_metrics(self._timing_for_key(key), line)
+        self.report["timings"] = [
+            timing
+            for timing in (self._timings_by_key[key] for key in self._timing_order)
+            if timing["prompt_eval_ms"] is not None
+            or timing["eval_ms"] is not None
+            or timing["total_ms"] is not None
+        ]
         self._finalize()
         return self.report
 
     def _is_timing_metric_line(self, line: str) -> bool:
         return bool(Regexes.PROMPT_EVAL.search(line) or Regexes.EVAL.search(line) or Regexes.TOTAL.search(line))
+
+    def _timing_for_key(self, key: Tuple[Optional[int], Optional[int]]) -> Dict[str, Any]:
+        timing = self._timings_by_key.get(key)
+        if timing is None:
+            timing = self._blank_timing(key[0], key[1])
+            self._timings_by_key[key] = timing
+            self._timing_order.append(key)
+        return timing
+
+    @staticmethod
+    def _blank_timing(slot: Optional[int], task: Optional[int]) -> Dict[str, Any]:
+        return {
+            "slot_id": slot,
+            "task_id": task,
+            "prompt_eval_ms": None,
+            "prompt_tokens": None,
+            "prompt_ms_per_token": None,
+            "prompt_tokens_per_second": None,
+            "eval_ms": None,
+            "eval_tokens": None,
+            "eval_ms_per_token": None,
+            "eval_tokens_per_second": None,
+            "total_ms": None,
+            "total_tokens": None,
+            "active_context": {},
+            "context_band": None,
+            "generation_speed_grade": None,
+            "prompt_eval_grade": None,
+            "warnings": [],
+        }
+
+    def _apply_timing_metrics(self, timing: Dict[str, Any], line: str) -> None:
+        # "prompt eval time" also contains "eval time", so check the prompt form first.
+        prompt = Regexes.PROMPT_EVAL.search(line)
+        if prompt:
+            timing["prompt_eval_ms"] = parse_number(prompt.group("ms"))
+            timing["prompt_tokens"] = parse_int(prompt.group("tokens"))
+            timing["prompt_ms_per_token"] = parse_number(prompt.group("mspt"))
+            timing["prompt_tokens_per_second"] = parse_number(prompt.group("tps"))
+            return
+        eval_match = Regexes.EVAL.search(line)
+        if eval_match:
+            timing["eval_ms"] = parse_number(eval_match.group("ms"))
+            timing["eval_tokens"] = parse_int(eval_match.group("tokens"))
+            timing["eval_ms_per_token"] = parse_number(eval_match.group("mspt"))
+            timing["eval_tokens_per_second"] = parse_number(eval_match.group("tps"))
+            return
+        total = Regexes.TOTAL.search(line)
+        if total:
+            timing["total_ms"] = parse_number(total.group("ms"))
+            timing["total_tokens"] = parse_int(total.group("tokens"))
 
     def _parse_line(self, line: str) -> None:
         self._parse_model_and_load(line)
@@ -591,6 +652,18 @@ class LogParser:
         slot_ctx = Regexes.NEW_SLOT_CTX.search(line)
         if slot_ctx and self.report["load"]["context_actual"] is None:
             self.report["load"]["context_actual"] = parse_int(slot_ctx.group("ctx"))
+
+        # llama-server: "initializing, n_slots = N, n_ctx_slot = N, kv_unified = 'true'"
+        if "n_ctx_slot" in line:
+            ctx_slot = re.search(r"n_ctx_slot\s*=\s*([0-9,]+)", line)
+            if ctx_slot and self.report["load"]["context_actual"] is None:
+                self.report["load"]["context_actual"] = parse_int(ctx_slot.group(1))
+            n_slots = re.search(r"n_slots\s*=\s*([0-9,]+)", line)
+            if n_slots and self.report["load"]["slots"] is None:
+                self.report["load"]["slots"] = parse_int(n_slots.group(1))
+            kv_unified = re.search(r"kv_unified\s*=\s*'?(true|false|yes|no)'?", line, re.IGNORECASE)
+            if kv_unified and self.report["load"]["kv_unified"] is None:
+                self.report["load"]["kv_unified"] = bool_from_text(kv_unified.group(1))
 
         if "load_tensors:" in line and "mmap" in line:
             mmap_match = re.search(r"mmap\s*=\s*(true|false|yes|no)", line, re.IGNORECASE)
@@ -801,63 +874,6 @@ class LogParser:
             if value is not None:
                 state["stop_processing_n_tokens"] = value
                 slot_state["stop_processing_n_tokens"] = value
-
-    def _parse_timing(self, index: int, header: Optional[re.Match[str]]) -> Tuple[Optional[Dict[str, Any]], int]:
-        slot = parse_int(header.group("slot")) if header else None
-        task = parse_int(header.group("task")) if header else None
-        timing: Dict[str, Any] = {
-            "slot_id": slot,
-            "task_id": task,
-            "prompt_eval_ms": None,
-            "prompt_tokens": None,
-            "prompt_ms_per_token": None,
-            "prompt_tokens_per_second": None,
-            "eval_ms": None,
-            "eval_tokens": None,
-            "eval_ms_per_token": None,
-            "eval_tokens_per_second": None,
-            "total_ms": None,
-            "total_tokens": None,
-            "active_context": {},
-            "context_band": None,
-            "generation_speed_grade": None,
-            "prompt_eval_grade": None,
-            "warnings": [],
-        }
-        consumed = 1
-        start_offset = 1 if header else 0
-        for offset in range(start_offset, start_offset + 8):
-            if index + offset >= len(self.lines):
-                break
-            line = self.lines[index + offset]
-            if offset != start_offset and Regexes.TIMING_HEADER.search(line):
-                break
-            prompt = Regexes.PROMPT_EVAL.search(line)
-            eval_match = Regexes.EVAL.search(line)
-            total = Regexes.TOTAL.search(line)
-            if prompt:
-                timing["prompt_eval_ms"] = parse_number(prompt.group("ms"))
-                timing["prompt_tokens"] = parse_int(prompt.group("tokens"))
-                timing["prompt_ms_per_token"] = parse_number(prompt.group("mspt"))
-                timing["prompt_tokens_per_second"] = parse_number(prompt.group("tps"))
-                consumed = offset + 1
-            elif eval_match:
-                timing["eval_ms"] = parse_number(eval_match.group("ms"))
-                timing["eval_tokens"] = parse_int(eval_match.group("tokens"))
-                timing["eval_ms_per_token"] = parse_number(eval_match.group("mspt"))
-                timing["eval_tokens_per_second"] = parse_number(eval_match.group("tps"))
-                consumed = offset + 1
-            elif total:
-                timing["total_ms"] = parse_number(total.group("ms"))
-                timing["total_tokens"] = parse_int(total.group("tokens"))
-                consumed = offset + 1
-        timing["active_context"] = self._derive_active_context(slot, task, timing)
-        timing["context_band"] = context_band(timing["active_context"].get("value"), self.thresholds)
-        timing["generation_speed_grade"] = speed_grade(timing["eval_tokens_per_second"], timing["context_band"], self.thresholds)
-        timing["prompt_eval_grade"] = prompt_grade(timing["prompt_tokens_per_second"], timing["prompt_tokens"], self.thresholds)
-        if timing["prompt_eval_ms"] is None and timing["eval_ms"] is None and timing["total_ms"] is None:
-            return None, consumed
-        return timing, consumed
 
     def _derive_active_context(self, slot: Optional[int], task: Optional[int], timing: Dict[str, Any]) -> Dict[str, Any]:
         context: Dict[str, int] = {}

@@ -103,6 +103,31 @@ slot      release: id  0 | task 7 | stop processing: n_tokens = 12000, truncated
         self.assertEqual(timing["active_context"]["candidates"]["prompt_done_plus_eval"], 10100)
         self.assertIsNotNone(timing["active_context"]["conflict_warning"])
 
+    def test_new_server_print_timing_header_per_line(self) -> None:
+        # Recent llama-server prints a "print_timing" header on every timing line,
+        # including the metric lines themselves, and reports context as n_ctx_slot.
+        snippet = """
+srv    load_model: initializing, n_slots = 1, n_ctx_slot = 131072, kv_unified = 'true'
+slot launch_slot_: id  0 | task 0 | processing task, is_child = 0
+slot print_timing: id  0 | task 0 | n_decoded =    159, tg =  52.22 t/s, tg_3s =  52.22 t/s
+slot print_timing: id  0 | task 0 | prompt eval time =    1290.58 ms /   564 tokens (    2.29 ms per token,   437.01 tokens per second)
+slot print_timing: id  0 | task 0 |        eval time =    7543.91 ms /   408 tokens (   18.49 ms per token,    54.08 tokens per second)
+slot print_timing: id  0 | task 0 |       total time =    8834.49 ms /   972 tokens
+slot      release: id  0 | task 0 | stop processing: n_tokens = 972, truncated = 0
+"""
+        report = LLLogAnalyzer.parse_log(snippet, source_name="new_server.log")
+
+        self.assertEqual(report["load"]["context_actual"], 131072)
+        self.assertEqual(len(report["timings"]), 1)
+        timing = report["timings"][0]
+        self.assertEqual(timing["task_id"], 0)
+        self.assertEqual(timing["prompt_tokens_per_second"], 437.01)
+        self.assertEqual(timing["eval_tokens_per_second"], 54.08)
+        self.assertEqual(timing["eval_tokens"], 408)
+        self.assertEqual(timing["total_tokens"], 972)
+        self.assertEqual(timing["active_context"]["value"], 972)
+        self.assertEqual(report["timing_summary"]["overall_generation_tps"], 54.08)
+
 
 class CliTests(unittest.TestCase):
     def test_json_cli_output(self) -> None:
